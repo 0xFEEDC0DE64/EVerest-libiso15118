@@ -7,7 +7,7 @@
 #include <atomic>
 #include <type_traits>
 
-namespace util {
+namespace everest::staging::util {
 
 template <typename T, typename B> class AtomicEnumFlags {
     static_assert(std::is_enum<T>(), "Not enum");
@@ -53,5 +53,5 @@ public:
     }
 };
 
-} // namespace util
+} // namespace everest::staging::util
 #endif
