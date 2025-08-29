@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2023 - 2023 Pionix GmbH and Contributors to EVerest
-#include <slac/fsm/ev/states/sounding.hpp>
+#include <everest/slac/fsm/ev/states/sounding.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -9,7 +9,7 @@
 
 #include "timing_helper.hpp"
 
-#include <slac/fsm/ev/states/others.hpp>
+#include <everest/slac/fsm/ev/states/others.hpp>
 
 namespace slac::fsm::ev {
 

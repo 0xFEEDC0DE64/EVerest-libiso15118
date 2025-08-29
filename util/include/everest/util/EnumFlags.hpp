@@ -14,7 +14,7 @@
 #include <limits>
 #include <type_traits>
 
-namespace everest::staging::util {
+namespace everest::util {
 
 /**
  * \brief templated class to use an enumeration as bit flags
@@ -239,6 +239,6 @@ template <typename T> struct EnumFlags : public EnumFlagsBase<T, SelectedUInt<T>
 
 template <typename T> struct AtomicEnumFlags : public EnumFlagsBase<T, std::atomic<SelectedUInt<T>>> {};
 
-} // namespace everest::staging::util
+} // namespace everest::util
 
 #endif

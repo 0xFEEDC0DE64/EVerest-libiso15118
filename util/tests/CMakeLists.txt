@@ -6,7 +6,7 @@ add_executable(EnumFlagsTest
 target_link_libraries(EnumFlagsTest
     PRIVATE
         GTest::gtest_main
-        everest::staging::util
+        everest::util
 )
 
 include(GoogleTest)

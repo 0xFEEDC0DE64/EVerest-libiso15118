@@ -7,7 +7,7 @@
 
 #include <slac/slac.hpp>
 
-#include <slac/fsm/ev/fsm.hpp>
+#include <everest/slac/fsm/ev/fsm.hpp>
 
 namespace slac::fsm::ev {
 

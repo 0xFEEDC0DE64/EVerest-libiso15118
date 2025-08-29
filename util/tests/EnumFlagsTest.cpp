@@ -2,7 +2,7 @@
 // Copyright Pionix GmbH and Contributors to EVerest
 #include <gtest/gtest.h>
 
-#include <everest/staging/util/EnumFlags.hpp>
+#include <everest/util/EnumFlags.hpp>
 
 enum class ErrorHandlingFlags : std::uint8_t {
     prevent_charging,
@@ -36,7 +36,7 @@ enum class BspErrors : std::uint8_t {
     last = VendorError
 };
 
-using namespace everest::staging::util;
+using namespace everest::util;
 
 TEST(AtomicEnumFlagsTest, init) {
     AtomicEnumFlags<ErrorHandlingFlags> flags;

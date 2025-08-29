@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright Pionix GmbH and Contributors to EVerest
 #include <gtest/gtest.h>
 
-#include <everest/staging/util/EnumFlags.hpp>
+#include <everest/util/EnumFlags.hpp>
 
 namespace {
-using namespace everest::staging::util;
+using namespace everest::util;
 
 // needs an 8-bit value
 enum class small : std::uint8_t {
