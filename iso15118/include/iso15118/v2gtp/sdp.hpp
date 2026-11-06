@@ -2,9 +2,13 @@
 // Copyright Pionix GmbH and Contributors to EVerest
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <vector>
 
-namespace iso15118::io::v2gtp {
+namespace iso15118::v2gtp {
 enum class Security : uint8_t {
     TLS = 0x00,
     NO_TRANSPORT_SECURITY = 0x10,
@@ -15,7 +19,11 @@ enum class TransportProtocol : uint8_t {
     RESERVED_FOR_UDP = 0x10,
 };
 
-static constexpr auto SDP_SERVER_PORT = 15118;
+inline constexpr auto SDP_SERVER_PORT = 15118;
+
+// [V2G2-138] V2G_UDP_SDP_CLIENT, ISO 15118-2 Table 15: the SDP client's source port range.
+inline constexpr std::uint16_t SDP_CLIENT_PORT_MIN = 49152;
+inline constexpr std::uint16_t SDP_CLIENT_PORT_MAX = 65535;
 
 enum class PayloadType : uint16_t {
     SAP = 0x8001,
@@ -40,4 +48,21 @@ constexpr bool is_known_payload_type(PayloadType type) {
     return false;
 }
 
-} // namespace iso15118::io::v2gtp
+struct SdpRequest {
+    Security security;
+    TransportProtocol transport;
+};
+
+struct SdpResponse {
+    std::array<uint8_t, 16> address;
+    uint16_t port; // host byte order
+    Security security;
+    TransportProtocol transport;
+};
+
+std::vector<uint8_t> encode_sdp_request(const SdpRequest&);
+std::optional<SdpRequest> decode_sdp_request(const uint8_t*, size_t);
+std::vector<uint8_t> encode_sdp_response(const SdpResponse&);
+std::optional<SdpResponse> decode_sdp_response(const uint8_t*, size_t);
+
+} // namespace iso15118::v2gtp
