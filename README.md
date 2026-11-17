@@ -34,6 +34,7 @@ All deviations at once: `git diff upstream esp32/main`, or
 |---|---|---|
 | libslac's state machines on `fsm::v2` instead of Boost.MSM ([EVerest/EVerest#3106](https://github.com/EVerest/EVerest/pull/3106)) | `slac/` (see [`deviations.txt`](.github/sync/deviations.txt)), `util/include/everest/util/fsm/fsm.hpp` | No Boost.MSM templates: plain state classes that build on embedded toolchains with less code. EVerest main's later fixes to the EVSE machine (EVerest/EVerest#3133, EVerest/EVerest#3166, EVerest/EVerest#3328, EVerest/EVerest#3334) are ported onto it. |
 | No `SO_REUSEPORT` on lwIP | `iso15118/src/iso15118/io/sdp_server.cpp` | lwIP (ESP-IDF) does not implement the option; the SDP server would not start. To be removed once ESP-IDF has the lwIP fix. |
+| `PollManager` polls its eventfd from construction and closes it on destruction | `iso15118/include/iso15118/io/poll_manager.hpp`, `iso15118/src/iso15118/io/poll_manager.cpp` | Since the controller binds the network interface after its first `poll()`, that poll had an empty set: ESP-IDF rejects it (`fds == NULL`), and `abort()` could not wake it. The eventfd also leaked with every controller. To be proposed upstream. |
 
 Everything else is identical to EVerest main, including the README, `THIRD_PARTY.md` and `LICENSE` files of the
 libraries. [`.github/sync/verify.sh`](.github/sync/verify.sh) fails any change outside
