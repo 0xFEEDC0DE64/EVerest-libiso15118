@@ -49,12 +49,19 @@ SdpServer::SdpServer(const std::string& interface_name) {
     inet_ntop(AF_INET6, &socket_address.sin6_addr, addr_res, INET6_ADDRSTRLEN);
     logf_info("Starting SDP server with address: %s", addr_res);
 
+    // TODO: lwIP (ESP-IDF) does not implement SO_REUSEPORT yet, so setsockopt() fails with ENOPROTOOPT. Remove this
+    // guard and realign the file with EVerest main once the ESP-IDF in use has the fix (lwIP patch #10639/#10640,
+    // Espressif esp-lwip PR).
+#if defined(LWIP_SOCKET) && LWIP_SOCKET
+    int result;
+#else
     int enable = 1;
     auto result = setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(enable));
     if (result == -1) {
         const auto error_msg = adding_err_msg("Setsockopt(SO_REUSEPORT) failed");
         log_and_throw(error_msg.c_str());
     }
+#endif
 
     const auto bind_result =
         bind(fd, reinterpret_cast<const struct sockaddr*>(&socket_address), sizeof(socket_address));
