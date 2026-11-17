@@ -40,18 +40,28 @@ build() {
             git worktree remove --force "$work"
             return 1
         fi
-        if ! git -C "$work" am -q -3 --whitespace=nowarn "$patch" >/dev/null 2>&1; then
+        # The commits only exist in this throwaway worktree: a fixed committer, so that it runs without a git
+        # identity (CI). The author comes from the patch.
+        if ! git -C "$work" -c user.name=patches.sh -c user.email=patches.sh@localhost \
+            am -q -3 --whitespace=nowarn "$patch" >"$work.am.log" 2>&1; then
             local name conflicts
             name=$(basename "$patch")
             conflicts=$(git -C "$work" diff --name-only --diff-filter=U)
             git -C "$work" am --abort >/dev/null 2>&1 || true
-            echo "conflict $name" >&2
-            sed 's/^/  /' <<<"$conflicts" >&2
+            if [[ -n $conflicts ]]; then
+                echo "conflict $name" >&2
+                sed 's/^/  /' <<<"$conflicts" >&2
+            else
+                echo "error $name" >&2
+                sed 's/^/  /' "$work.am.log" >&2
+            fi
+            rm -f "$work.am.log"
             git worktree remove --force "$work"
             return 1
         fi
     done
     commit=$(git -C "$work" rev-parse HEAD)
+    rm -f "$work.am.log"
     git worktree remove --force "$work"
     echo "$commit"
 }
