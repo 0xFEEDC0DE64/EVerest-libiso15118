@@ -1,0 +1,10 @@
+# Keeps the actions in .github/workflows, pinned to commits, up to date.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: esp32/main
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci

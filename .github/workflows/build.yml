@@ -1,0 +1,92 @@
+name: Build and test in EVerest
+
+# Builds and tests the four libraries inside EVerest at the commit `upstream` was built from (`everest` in
+# .github/sync/upstream.conf): EVerest's lib/everest/{cbv2g,iso15118,slac,util} are replaced by this repo's, then
+# .github/sync/build_test.sh runs in EVerest's CI build kit with EVerest's CI options.
+on:
+  pull_request:
+    branches: [esp32/main]
+  push:
+    branches: [esp32/main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: This repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: mirror
+          persist-credentials: false
+
+      - name: EVerest commit
+        id: everest
+        run: echo "commit=$(awk '$1 == "everest" { print $2 }' mirror/.github/sync/upstream.conf)" >>"$GITHUB_OUTPUT"
+
+      - name: EVerest
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: EVerest/EVerest
+          ref: ${{ steps.everest.outputs.commit }}
+          path: everest
+          persist-credentials: false
+
+      - name: Replace EVerest's libraries with this repo's
+        run: |
+          for lib in cbv2g iso15118 slac util; do
+            rm -rf "everest/lib/everest/${lib:?}"
+            cp -a "mirror/$lib" "everest/lib/everest/$lib"
+          done
+
+      - name: Build kit
+        # EVerest's own Dockerfile, on the build-kit-base version EVerest's CI pins for this commit.
+        run: |
+          tag=$(sed -n 's/^ *ref_everest_ci: *//p' everest/.github/workflows/on_pr.yaml | head -1)
+          echo "build-kit-base:$tag"
+          docker build -q -t build-kit --build-arg BASE_IMAGE_TAG="$tag" everest/.ci/build-kit/docker
+
+      - name: Restore ccache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ccache
+          key: ccache-${{ steps.everest.outputs.commit }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ steps.everest.outputs.commit }}-
+            ccache-
+
+      - name: Build and test
+        run: |
+          mkdir -p ccache logs
+          docker run --rm \
+            --cap-add NET_ADMIN \
+            --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+            --sysctl net.ipv6.conf.default.disable_ipv6=0 \
+            -e CCACHE_DIR=/ccache \
+            -v "$PWD/ccache:/ccache" \
+            -v "$PWD/everest:/source" \
+            -v "$PWD/logs:/logs" \
+            -v "$PWD/mirror/.github/sync:/sync:ro" \
+            --entrypoint bash build-kit /sync/build_test.sh /source /build /logs
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ccache
+          key: ccache-${{ steps.everest.outputs.commit }}-${{ github.sha }}
+
+      - name: Logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-test-logs
+          path: logs/

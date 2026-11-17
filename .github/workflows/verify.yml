@@ -1,11 +1,12 @@
-name: Deviations from EVerest main
+name: Patch check
 
-# Every file outside .github/sync/deviations.txt must stay identical to `upstream` (EVerest main).
+# esp32/main must be exactly `upstream` (EVerest main) plus the patches in patches/.
 on:
   pull_request:
     branches: [esp32/main]
   push:
     branches: [esp32/main]
+  workflow_dispatch: # sync.yml starts it for the sync branch
 
 permissions:
   contents: read
@@ -14,8 +15,8 @@ jobs:
   verify:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - run: git fetch --no-tags origin upstream:upstream
-      - run: .github/sync/verify.sh upstream HEAD
+      - run: .github/sync/patches.sh verify upstream HEAD

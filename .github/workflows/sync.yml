@@ -1,7 +1,7 @@
 name: Sync with EVerest main
 
-# Rebuilds `upstream` from EVerest main (and the old standalone repos), pushes it when it only adds commits, and opens
-# a pull request that merges it into esp32/main. Nothing reaches esp32/main without a review.
+# Rebuilds `upstream` from EVerest main (and the old standalone repos), pushes it when it only adds commits, applies
+# patches/ on it and opens a pull request into esp32/main. Nothing reaches esp32/main without a review.
 on:
   schedule:
     - cron: '0 5 * * 1' # Mondays 05:00 UTC
@@ -10,6 +10,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write # starts verify.yml and build.yml for the sync branch
+  issues: write # reports a sync that needs a person
 
 concurrency:
   group: sync
@@ -19,7 +21,7 @@ jobs:
   sync:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: esp32/main
           fetch-depth: 0
@@ -40,15 +42,67 @@ jobs:
           cat "$RUNNER_TEMP/sources/sync.env" >>"$GITHUB_OUTPUT"
           exit $code
 
-      - name: Push upstream and open the pull request
-        if: steps.sync.outputs.status == 'merged' || steps.sync.outputs.status == 'conflict' || steps.sync.outputs.status == 'verify-failed'
+      - name: Push upstream and open or update the pull request
+        if: contains(fromJSON('["synced", "patch-conflict", "patch-upstream", "verify-failed"]'), steps.sync.outputs.status)
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ steps.sync.outputs.branch }}
           STATUS: ${{ steps.sync.outputs.status }}
+          EVEREST: ${{ steps.sync.outputs.everest }}
         run: |
           git push origin upstream
-          git push origin "HEAD:refs/heads/$BRANCH"
-          title="Sync with EVerest main ${BRANCH##*-}"
-          [ "$STATUS" = merged ] || title="$title ($STATUS)"
-          gh pr create --base esp32/main --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/sources/sync-pr.md"
+          title="Sync with EVerest main ${EVEREST:0:9}"
+          [ "$STATUS" = synced ] || title="$title ($STATUS)"
+          body="$RUNNER_TEMP/sources/sync-pr.md"
+          pr=$(gh pr list --base esp32/main --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          remote=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+
+          # An open sync pull request that people already committed to is theirs: leave it, say so.
+          if [ -n "$pr" ] && [ -n "$remote" ]; then
+            git fetch -q origin "$BRANCH"
+            people=$(git log --first-parent --format='%ae' origin/esp32/main..FETCH_HEAD | grep -v 'github-actions\[bot\]' || true)
+            if [ -n "$people" ]; then
+              gh pr comment "$pr" --body "EVerest main moved on to \`${EVEREST:0:9}\`. This branch has commits by people, so the sync left it as it is: merge or close this pull request, then run the sync again."
+              exit 0
+            fi
+          fi
+
+          git push --force-with-lease="refs/heads/$BRANCH:$remote" origin "HEAD:refs/heads/$BRANCH"
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "$title" --body-file "$body"
+          else
+            gh pr create --base esp32/main --head "$BRANCH" --title "$title" --body-file "$body"
+          fi
+
+          # Pull requests opened with this workflow's token start no workflows by themselves.
+          gh workflow run verify.yml --ref "$BRANCH"
+          gh workflow run build.yml --ref "$BRANCH"
+
+      # A stopped sync (new history sources, not a fast-forward, an error) opens or comments on one issue; the next
+      # sync that gets through closes it.
+      - name: Report a sync that needs a person
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ steps.sync.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Sync needs attention"
+          body="The sync of $(date -u +%Y-%m-%d) stopped${STATUS:+ with status \`$STATUS\`}: $RUN_URL"
+          issue=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
+
+      - name: Close the report once a sync gets through
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          issue=$(gh issue list --state open --search '"Sync needs attention" in:title' --json number --jq '.[0].number // empty')
+          if [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "The sync got through again: $RUN_URL"
+          fi

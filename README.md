@@ -14,31 +14,48 @@ This is an unofficial mirror, not a project of LF Energy or EVerest. Bugs in the
 the rest of EVerest, for example on a microcontroller: a small repo to pin as a git submodule, with every change from
 upstream reviewed in a pull request.
 
-The folders are EVerest's, file for file. The few deviations are listed below and checked on every pull request.
+The folders are EVerest's, file for file, plus the few patches in [`patches/`](patches), which are checked on every
+pull request.
 
 ## Branches and tags
 
 | Ref | Content |
 |---|---|
 | `upstream` | EVerest main, reduced to the four libraries and `LICENSE`. Generated, never edited by hand. |
-| `esp32/main` (default) | `upstream` plus the deviations below, this README and the CI. |
+| `esp32/main` (default) | `upstream` with the patches applied, this README and the CI. |
 | `esp32-YYYY.MM.DD` | Releases of `esp32/main`. Pin these. |
 | `libiso15118-v0.9.1`, `libcbv2g-v0.3.2`, `libslac-v0.3.1` | The standalone releases EVerest integrated. |
 
-All deviations at once: `git diff upstream esp32/main`, or
-[compare `upstream...esp32/main`](https://github.com/vampirebyte/EVerest-libiso15118/compare/upstream...esp32/main) (append `.diff` for plain text).
+## Patches
 
-## Deviations from EVerest main
+Each deviation from EVerest main is one patch in [`patches/`](patches), with its author, date and sign-off in the
+header. They are applied in order onto `upstream`.
 
-| Deviation | Files | Why |
+| Patch | Why | Until |
 |---|---|---|
-| libslac's state machines on `fsm::v2` instead of Boost.MSM ([EVerest/EVerest#3106](https://github.com/EVerest/EVerest/pull/3106)) | `slac/` (see [`deviations.txt`](.github/sync/deviations.txt)), `util/include/everest/util/fsm/fsm.hpp` | No Boost.MSM templates: plain state classes that build on embedded toolchains with less code. EVerest main's later fixes to the EVSE machine (EVerest/EVerest#3133, EVerest/EVerest#3166, EVerest/EVerest#3328, EVerest/EVerest#3334) are ported onto it. |
-| No `SO_REUSEPORT` on lwIP | `iso15118/src/iso15118/io/sdp_server.cpp` | lwIP (ESP-IDF) does not implement the option; the SDP server would not start. To be removed once ESP-IDF has the lwIP fix. |
-| `PollManager` polls its eventfd from construction and closes it on destruction | `iso15118/include/iso15118/io/poll_manager.hpp`, `iso15118/src/iso15118/io/poll_manager.cpp` | Since the controller binds the network interface after its first `poll()`, that poll had an empty set: ESP-IDF rejects it (`fds == NULL`), and `abort()` could not wake it. The eventfd also leaked with every controller. To be proposed upstream. |
+| `0001` libslac's state machines on `fsm::v2` instead of Boost.MSM, from [EVerest/EVerest#3106](https://github.com/EVerest/EVerest/pull/3106) | No Boost.MSM templates: plain state classes that build on embedded toolchains with less code. | EVerest adopts fsm::v2 |
+| `0002` EVerest main's later fixes to the EVSE machine, ported onto `fsm::v2` (EVerest/EVerest#3133, EVerest/EVerest#3166, EVerest/EVerest#3328, EVerest/EVerest#3334) | They were made to the Boost.MSM machine only. | with `0001` |
+| `0003` no `SO_REUSEPORT` on lwIP in the SDP server | lwIP (ESP-IDF) does not implement the option; the SDP server would not start. | the ESP-IDF in use supports `SO_REUSEPORT` |
+| `0004` `PollManager` polls its eventfd from construction and closes it on destruction | Since the controller binds the network interface after its first `poll()`, that poll had an empty set: ESP-IDF rejects it (`fds == NULL`), and `abort()` could not wake it. The eventfd also leaked with every controller. | EVerest merges the fix |
 
 Everything else is identical to EVerest main, including the README, `THIRD_PARTY.md` and `LICENSE` files of the
-libraries. [`.github/sync/verify.sh`](.github/sync/verify.sh) fails any change outside
-[`deviations.txt`](.github/sync/deviations.txt).
+libraries. `patches.sh verify` checks on every pull request that `esp32/main` is exactly `upstream`
+plus the patches, so a library file changed without its patch fails.
+
+### Changing a patch
+
+The library folders are generated: change the patches, not the folders.
+[`patches.sh`](.github/sync/patches.sh) turns them into a branch and back:
+
+```bash
+.github/sync/patches.sh edit      # worktree on patches/edit = upstream + one commit per patch, authors kept
+# in the printed worktree: commit, git commit --amend, git rebase -i, ...
+.github/sync/patches.sh export    # writes patches/ from patches/edit
+.github/sync/patches.sh apply     # regenerates the library folders
+```
+
+A new deviation is a new commit on `patches/edit`. A patch that EVerest merged is deleted from `patches/`; the sync
+says so when it finds one.
 
 ## Using it
 
@@ -84,10 +101,16 @@ git log --follow -M10% -- slac/src/fsm/evse/context.cpp
 
 1. Rebuilds `upstream` from EVerest main and the standalone repos with
    [`build_upstream.sh`](.github/sync/build_upstream.sh) (git filter-repo). The result is deterministic: the same
-   inputs give the same hashes, so a sync only adds commits to `upstream`.
-2. Merges it into a `sync/<date>-<sha>` branch made from `esp32/main`, runs the deviation check, and opens a pull
-   request with the list of upstream commits. On conflicts the pull request says how to finish the merge.
-3. A person reviews and merges it, then tags a release.
+   inputs give the same hashes, so a sync only adds commits to `upstream`. Of each standalone repo, only the release
+   listed in [`upstream.conf`](.github/sync/upstream.conf) is fetched; if it is no longer on GitHub, the history comes
+   from this repo's tags (`libiso15118-v0.9.1`, ...) and gives the same hashes.
+2. Applies the patches onto it and commits the result on the branch `sync/everest-main` made from `esp32/main`, with
+   `upstream` as second parent, so `esp32/main` keeps the whole history. It runs the patch check and opens a pull
+   request with the list of upstream commits, or updates the open one. When a patch no longer applies, or is in
+   EVerest now, the pull request names it and gives the steps to finish the sync. An open sync pull request that people
+   already committed to is left as it is, with a comment.
+3. A person reviews and merges it with "Create a merge commit", then tags a release. Squash or rebase merging would
+   drop `upstream` as a parent, and with it the EVerest history.
 
 It stops for a person when EVerest moves another folder into the four libraries
 ([`trace_paths.py`](.github/sync/trace_paths.py) finds new history sources), because updating
@@ -96,8 +119,26 @@ It stops for a person when EVerest moves another folder into the four libraries
 Locally: `pip install git-filter-repo==2.47.0`, then `.github/sync/sync.sh /tmp/sources` in a checkout with the
 branches `upstream` and `esp32/main`.
 
-Pull requests the workflow opens do not trigger other workflows (a GitHub rule for its token); their text includes
-the result of the deviation check.
+Pull requests the workflow opens start no workflows by themselves (a GitHub rule for its token), so it starts
+`verify.yml` and `build.yml` for the sync branch itself; their results show as the pull request's checks.
+
+A sync that stops without a pull request (new history sources, not a fast-forward, an error) opens the issue "Sync
+needs attention"; the next sync that gets through closes it.
+
+GitHub disables scheduled workflows in a public repository after 60 days without activity. If EVerest leaves the four
+libraries alone that long, the Monday sync stops quietly: re-enable it under Actions → "Sync with EVerest main" →
+"Enable workflow", or run it by hand there.
+
+[`dependabot.yml`](.github/dependabot.yml) keeps the actions, which are pinned to commits, up to date with a monthly
+pull request.
+
+## Build and test
+
+[`build.yml`](.github/workflows/build.yml) runs on every pull request and push to `esp32/main`: it takes EVerest at the
+commit `upstream` was built from (`everest` in [`upstream.conf`](.github/sync/upstream.conf), updated by each sync),
+replaces its four libraries with this repo's, and builds and tests them in EVerest's CI build kit with
+`EVEREST_ENABLE_COMPILE_WARNINGS=ON` ([`build_test.sh`](.github/sync/build_test.sh)). A patch that applies but no longer
+fits EVerest fails here. ccache is kept between runs.
 
 ## License
 
