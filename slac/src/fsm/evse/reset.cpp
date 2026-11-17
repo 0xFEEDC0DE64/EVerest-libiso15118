@@ -72,9 +72,9 @@ void select_nmk_for_reset(SlacMachine& m) {
     auto& data = m.reset_data;
     if (config.regenerate_key_on_reset) {
         if (config.set_key_handling_mode == SetKeyHandlingMode::retry_confirmed) {
-            config.generate_nmk(data.pending_nmk);
+            m.ctx.generate_nmk(data.pending_nmk);
         } else {
-            config.generate_nmk(config.session_nmk);
+            m.ctx.generate_nmk(config.session_nmk);
         }
     } else {
         data.pending_nmk = config.session_nmk;
@@ -88,7 +88,6 @@ void select_nmk_for_reset(SlacMachine& m) {
 void send_set_key_req(SlacMachine& m) {
     auto& ctx = m.ctx;
     Nmk const& nmk = is_retry_confirmed(ctx) ? m.reset_data.pending_nmk : ctx.slac_config.session_nmk;
-    ctx.log_info("Using SLAC session NMK " + format_session_nmk_for_log(nmk));
     auto msg = fsm::evse::MatchingSessionData::create_cm_set_key_req(nmk);
     m.reset_data.set_key_timer.arm(ctx.current_time, ctx.slac_config.set_key_timeout);
     if (not ctx.send_slac_message(ctx.slac_config.plc_peer_mac, msg)) {

@@ -35,6 +35,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <optional>
 #include <string>
 
 namespace everest::lib::slac::sm::evse {
@@ -56,6 +57,27 @@ public:
     bool failed() const {
         return region.current_id() == static_cast<int>(StateId::SessionFailed);
     }
+    // Finished sounding and waits for its CM_SLAC_MATCH.REQ. Only such an EV may run a CM_VALIDATE:
+    // the EVSE handles the REQs "from the EV which started the matching process" ([V2G3-A09-75],
+    // [V2G3-A09-85]), which validates after CM_ATTEN_CHAR.RSP ([V2G3-A09-38]).
+    bool awaits_slac_match(MacAddress const& ev_mac) const {
+        return session_data.ev_mac == ev_mac and
+               region.current_id() == static_cast<int>(StateId::SessionWaitSlacMatch);
+    }
+    // The TT_match_sequence window a completed CM_VALIDATE of this session's EV arms in WaitSlacMatch
+    // ([V2G3-A09-89], [V2G3-A09-90]).
+    void arm_validation_window(timer::tp now) {
+        validated = true;
+        validation_window.arm(now, std::chrono::milliseconds(defs::TT_MATCH_SEQUENCE_MS));
+    }
+    bool validation_window_expired(timer::tp now) const {
+        return validated and validation_window.expired(now);
+    }
+    void deadlines(earliest_deadline& next) const {
+        if (validated) {
+            next.offer(validation_window);
+        }
+    }
     void traverse(Visitor& visitor, std::size_t depth) const {
         region.traverse(visitor, depth);
     }
@@ -65,6 +87,8 @@ public:
 
     fsm::evse::MatchingSessionData session_data;
     fsm::evse::Context* ctx{nullptr};
+    bool validated{false};
+    timer validation_window;
 
 private:
     Region<StateBase> region;
@@ -192,19 +216,18 @@ struct WaitSlacMatch : SessionLevelState<StateId::SessionWaitSlacMatch> {
     explicit WaitSlacMatch(Session& s) :
         SessionLevelState(s, "WaitSlacMatch", std::chrono::milliseconds(defs::TT_EVSE_MATCH_SESSION_MS)) {
     }
+    void enter() override {
+        SessionLevelState::enter();
+        session.validated = false;
+    }
     // After a CM_VALIDATE process, the CM_SLAC_MATCH.REQ must arrive within TT_match_sequence (much
     // shorter than the overall TT_EVSE_match_session that bounds WaitSlacMatch otherwise). When that
-    // shorter window elapses the matching has FAILED (ISO 15118-5 CmSlacMatch_003/004 cmValidate
-    // variant); a late CM_SLAC_MATCH.REQ must then get no CM_SLAC_MATCH.CNF.
-    // Only the validated EV's session is held to the post-validation window; a parallel session of
-    // another EV keeps the full match session timeout.
-    bool validation_window_expired() const {
-        return ctx.validation_done and session.session_data.ev_mac == ctx.validation_ev_mac and
-               ctx.validation_match_window.expired(ctx.current_time);
-    }
+    // shorter window elapses the matching has FAILED ([V2G3-A09-90], ISO 15118-5 CmSlacMatch_006); a
+    // late CM_SLAC_MATCH.REQ must then get no CM_SLAC_MATCH.CNF. The window belongs to the session,
+    // so a parallel session of another EV keeps the full match session timeout.
     Result feed(Event const& e) override {
         if (e.is(EventId::update)) {
-            if (validation_window_expired()) {
+            if (session.validation_window_expired(ctx.current_time)) {
                 log_failed("No CM_SLAC_MATCH.REQ within TT_match_sequence after CM_VALIDATE, session failed");
                 return transition(make_session_failed());
             }
@@ -406,10 +429,12 @@ struct MatchingInit : InnerLevelState<StateId::MatchingInit> {
             data.sessions.clear();
             data.to.arm(ctx.current_time, ctx.slac_config.slac_init_timeout);
             data.failed_matching_reset_once = true;
-            // A validation belongs to the sessions just dropped. Left armed, its expired window would
-            // fail every new session the moment it reaches WaitSlacMatch.
+            // The published state stays MATCHING: for the EV the matching process goes on, it retries
+            // with a new CM_SLAC_PARM.REQ (C_EV_match_retry). UNMATCHED here would let an EIM in the gap
+            // take the "matching not started" path ([V2G3-M06-08]) and switch to E/F under the EV's retry.
+            ctx.log_info("Matching attempt failed, waiting for a new CM_SLAC_PARM.REQ");
+            // A validation in progress belongs to the sessions just dropped.
             data.validate.reset();
-            ctx.validation_done = false;
             return transition(std::make_unique<MatchingInit>(machine));
         }
         if (finished_without_match) {
@@ -438,7 +463,7 @@ struct Listen : InnerLevelState<StateId::MatchingListen> {
         auto& data = machine.matching_data;
         if (e.is(EventId::update)) {
             if (data.validate.needs_service(ctx.current_time)) {
-                data.validate.tick(ctx);
+                arm_validation_window(data.validate.tick(ctx));
                 return transition(std::make_unique<Listen>(machine));
             }
             return unhandled();
@@ -446,10 +471,7 @@ struct Listen : InnerLevelState<StateId::MatchingListen> {
         // CM_VALIDATE (ISO 15118-3 9.4) BCB-toggle validation lives in fsm::evse::ValidateHandler;
         // Matching only routes the REQ frames and the update tick to it.
         if (is_validate_req(e)) {
-            const auto req = e.payload->payload_as<messages::cm_validate_req>();
-            if (req.has_value()) {
-                data.validate.handle_req(*req, e.payload->get_src_mac(), ctx);
-            }
+            handle_validate_req(*e.payload);
             return transition(std::make_unique<Listen>(machine));
         }
         if (is_message_of_type(e, defs::MMTYPE_CM_SLAC_PARAM | defs::MMTYPE_MODE_REQ)) {
@@ -457,6 +479,36 @@ struct Listen : InnerLevelState<StateId::MatchingListen> {
             return transition(std::make_unique<Listen>(machine));
         }
         return unhandled();
+    }
+
+    // Answers a CM_VALIDATE.REQ only for an EV with a session waiting for its CM_SLAC_MATCH.REQ.
+    void handle_validate_req(messages::HomeplugMessage const& payload) {
+        auto const req = payload.payload_as<messages::cm_validate_req>();
+        auto const* src_mac = payload.get_src_mac();
+        if (not req.has_value() or src_mac == nullptr) {
+            return;
+        }
+        auto const ev_mac = byte_array_from_wire<MacAddress>(src_mac);
+        auto const& sessions = machine.matching_data.sessions;
+        if (std::none_of(sessions.begin(), sessions.end(),
+                         [&ev_mac](auto const& s) { return s->awaits_slac_match(ev_mac); })) {
+            ctx.log_debug("Ignoring CM_VALIDATE.REQ from " + format_mac_addr(ev_mac) +
+                          ": no session of this EV waits for CM_SLAC_MATCH.REQ");
+            return;
+        }
+        machine.matching_data.validate.handle_req(*req, src_mac, ctx);
+    }
+
+    // A completed CM_VALIDATE holds the validated EV's waiting sessions to TT_match_sequence.
+    void arm_validation_window(std::optional<MacAddress> const& validated_ev) {
+        if (not validated_ev.has_value()) {
+            return;
+        }
+        for (auto& session : machine.matching_data.sessions) {
+            if (session->awaits_slac_match(*validated_ev)) {
+                session->arm_validation_window(ctx.current_time);
+            }
+        }
     }
 
     void add_session(messages::HomeplugMessage const& payload) {
@@ -482,17 +534,17 @@ struct Listen : InnerLevelState<StateId::MatchingListen> {
                 return;
             }
             session_iter = data.sessions.emplace(data.sessions.end(), std::make_unique<Session>());
+            if (data.sessions.size() == 1) {
+                ctx.enter_state(SlacState::Matching, D3State::Matching, "Matching process started");
+            }
         }
         auto& session = **session_iter;
         session.session_data = session_data;
         session.ctx = &ctx;
-        // A new CM_SLAC_PARM.REQ starts this EV's SLAC run over; a validation from its previous
-        // run, in progress or completed, does not carry into it.
+        // A new CM_SLAC_PARM.REQ starts this EV's SLAC run over; a validation in progress from its
+        // previous run does not carry into it.
         if (data.validate.owner_mac() == session_data.ev_mac) {
             data.validate.reset();
-        }
-        if (ctx.validation_done and ctx.validation_ev_mac == session_data.ev_mac) {
-            ctx.validation_done = false;
         }
         session.start();
         // send reply
@@ -532,8 +584,11 @@ struct Matching : TopLevelState<StateId::Matching> {
         data.to.arm(ctx.current_time, ctx.slac_config.slac_init_timeout);
         data.failed_matching_reset_once = false;
         data.validate.reset();
-        ctx.validation_done = false;
-        ctx.enter_state(SlacState::Matching, D3State::Matching, "Entered Matching state, waiting for CM_SLAC_PARM.REQ");
+        // Armed, no matching process yet: the published state stays UNMATCHED until the first
+        // CM_SLAC_PARM.REQ, so the consumer can tell an EIM before any SLAC from one during a running
+        // matching ([V2G3-M06-08]).
+        ctx.enter_state(SlacState::Matching, D3State::Unmatched,
+                        "Entered Matching state, waiting for CM_SLAC_PARM.REQ");
         supervise.start(std::make_unique<MatchingInit>(machine));
         listen.start(std::make_unique<Listen>(machine));
         pipe.start(std::make_unique<Pipe>(machine));
@@ -578,8 +633,8 @@ struct Matching : TopLevelState<StateId::Matching> {
         auto const& data = machine.matching_data;
         next.offer(data.to);
         data.validate.deadlines(next);
-        if (ctx.validation_done) {
-            next.offer(ctx.validation_match_window);
+        for (auto const& session : data.sessions) {
+            session->deadlines(next);
         }
     }
     bool reacts_to(EventId e) const override {
