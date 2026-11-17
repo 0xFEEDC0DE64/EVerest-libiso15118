@@ -1,0 +1,21 @@
+name: Deviations from EVerest main
+
+# Every file outside .github/sync/deviations.txt must stay identical to `upstream` (EVerest main).
+on:
+  pull_request:
+    branches: [esp32/main]
+  push:
+    branches: [esp32/main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch --no-tags origin upstream:upstream
+      - run: .github/sync/verify.sh upstream HEAD

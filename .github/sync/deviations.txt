@@ -1,0 +1,29 @@
+# Paths on esp32/main that may differ from `upstream` (EVerest main). Every other path must be identical.
+# A line ending in / covers everything below it. See README.md, "Deviations from EVerest main".
+
+# This repo: documentation and CI.
+README.md
+.github/
+
+# fsm::v2 instead of Boost.MSM in libslac (EVerest/EVerest#3106), with EVerest main's later fixes ported onto it.
+slac/CMakeLists.txt
+slac/src/ev_slac_fsm.cpp
+slac/src/slac_fsm.cpp
+slac/src/fsm/fsm_helpers.hpp
+slac/src/fsm/msm_helpers.hpp
+slac/src/fsm/msm_traverse.hpp
+slac/src/fsm/ev/
+slac/src/fsm/evse/init.cpp
+slac/src/fsm/evse/link_status.hpp
+slac/src/fsm/evse/machine.cpp
+slac/src/fsm/evse/machine.hpp
+slac/src/fsm/evse/matched.cpp
+slac/src/fsm/evse/matching.cpp
+slac/src/fsm/evse/msm/
+slac/src/fsm/evse/reset.cpp
+slac/src/fsm/evse/reset_chip.cpp
+slac/src/fsm/evse/wait_for_link.cpp
+util/include/everest/util/fsm/fsm.hpp
+
+# lwIP has no SO_REUSEPORT.
+iso15118/src/iso15118/io/sdp_server.cpp

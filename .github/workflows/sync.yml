@@ -1,0 +1,54 @@
+name: Sync with EVerest main
+
+# Rebuilds `upstream` from EVerest main (and the old standalone repos), pushes it when it only adds commits, and opens
+# a pull request that merges it into esp32/main. Nothing reaches esp32/main without a review.
+on:
+  schedule:
+    - cron: '0 5 * * 1' # Mondays 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: esp32/main
+          fetch-depth: 0
+
+      - name: Tools and branches
+        run: |
+          pip install --quiet git-filter-repo==2.47.0
+          git fetch --no-tags origin upstream:upstream
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Sync
+        id: sync
+        run: |
+          set +e
+          .github/sync/sync.sh "$RUNNER_TEMP/sources"
+          code=$?
+          cat "$RUNNER_TEMP/sources/sync.env" >>"$GITHUB_OUTPUT"
+          exit $code
+
+      - name: Push upstream and open the pull request
+        if: steps.sync.outputs.status == 'merged' || steps.sync.outputs.status == 'conflict' || steps.sync.outputs.status == 'verify-failed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.sync.outputs.branch }}
+          STATUS: ${{ steps.sync.outputs.status }}
+        run: |
+          git push origin upstream
+          git push origin "HEAD:refs/heads/$BRANCH"
+          title="Sync with EVerest main ${BRANCH##*-}"
+          [ "$STATUS" = merged ] || title="$title ($STATUS)"
+          gh pr create --base esp32/main --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/sources/sync-pr.md"
