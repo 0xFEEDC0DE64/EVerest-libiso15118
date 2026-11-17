@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 180
     steps:
       - name: This repo
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: mirror
           persist-credentials: false
@@ -33,7 +33,7 @@ jobs:
         run: echo "commit=$(awk '$1 == "everest" { print $2 }' mirror/.github/sync/upstream.conf)" >>"$GITHUB_OUTPUT"
 
       - name: EVerest
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: EVerest/EVerest
           ref: ${{ steps.everest.outputs.commit }}
