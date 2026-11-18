@@ -5,6 +5,7 @@
 #include <cassert>
 #include <string>
 
+#include <fmt/format.h>
 #include <iso15118/detail/helper.hpp>
 #include <iso15118/detail/message_din/variant_access.hpp>
 
@@ -23,7 +24,7 @@ Variant::Variant(const io::StreamInputView& buffer_view) {
     const auto decode_status = decode_din_exiDocument(&va.input_stream, &doc);
 
     if (decode_status != 0) {
-        va.error = "decode_din_exiDocument failed with " + std::to_string(decode_status);
+        va.error = fmt::format("decode_din_exiDocument failed with {}", decode_status);
     } else {
         const auto& body = doc.V2G_Message.Body;
         va.header = &doc.V2G_Message.Header;

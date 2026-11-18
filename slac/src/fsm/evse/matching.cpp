@@ -33,6 +33,7 @@
 #include <everest/slac/slac_types.hpp>
 #include <everest/slac/telemetry.hpp>
 
+#include <fmt/format.h>
 #include <algorithm>
 #include <cstdio>
 #include <optional>
@@ -205,10 +206,9 @@ void send_atten_char(Session& session) {
     std::snprintf(average, sizeof(average), "%.1f", static_cast<double>(aag_overall_sum) / defs::AAG_LIST_LEN);
     std::string text = std::string("Avg atten.: ") + average + " dB";
     if (ctx.slac_config.sounding_atten_adjustment != 0) {
-        text += " plus offset " + std::to_string(ctx.slac_config.sounding_atten_adjustment) + " dB";
+        text += fmt::format(" plus offset {} dB", ctx.slac_config.sounding_atten_adjustment);
     }
-    text +=
-        ", from " + std::to_string(defs::AAG_LIST_LEN) + " groups, " + std::to_string(data.captured_sounds) + " sounds";
+    text += fmt::format(", from {} groups, {} sounds", defs::AAG_LIST_LEN, data.captured_sounds);
     ctx.log_info(session_log_prefix(data) + text);
 }
 
@@ -285,9 +285,8 @@ struct WaitAttenRsp : SessionLevelState<StateId::SessionWaitAttenRsp> {
                 log_failed("No CM_ATTEN_CHAR.RSP after all retries, session failed");
                 return transition(make_session_failed());
             }
-            ctx.log_info(session_log_prefix(data) +
-                         "No CM_ATTEN_CHAR.RSP yet, retransmitting CM_ATTEN_CHAR.IND (retry " +
-                         std::to_string(data.num_retries + 1) + " of " + std::to_string(defs::C_EV_MATCH_RETRY) + ")");
+            ctx.log_info(fmt::format("{}No CM_ATTEN_CHAR.RSP yet, retransmitting CM_ATTEN_CHAR.IND (retry {} of {})",
+                                     session_log_prefix(data), data.num_retries + 1, defs::C_EV_MATCH_RETRY));
             send_atten_char(session);
             data.num_retries++;
             return transition(std::make_unique<WaitAttenRsp>(session));
@@ -330,9 +329,8 @@ struct Sounding : SessionLevelState<StateId::SessionSounding> {
             data.captured_aags[i] += msg->aag[i];
         }
         data.captured_sounds++;
-        ctx.log_debug(session_log_prefix(data) + "Received CM_ATTEN_PROFILE.IND (" +
-                      std::to_string(data.captured_sounds) + " of " +
-                      std::to_string(defs::CM_SLAC_PARM_CNF_NUM_SOUNDS) + " sounds captured)");
+        ctx.log_debug(fmt::format("{}Received CM_ATTEN_PROFILE.IND ({} of {} sounds captured)", session_log_prefix(data),
+                                  data.captured_sounds, defs::CM_SLAC_PARM_CNF_NUM_SOUNDS));
         if (data.captured_sounds >= defs::CM_SLAC_PARM_CNF_NUM_SOUNDS) {
             ctx.log_info(session_log_prefix(data) + "Received all sounds, finalizing sounding");
         }
@@ -529,8 +527,8 @@ struct Listen : InnerLevelState<StateId::MatchingListen> {
         if (session_iter == data.sessions.end()) {
             auto const max_sessions = max_matching_sessions(ctx);
             if (static_cast<int>(data.sessions.size()) >= max_sessions) {
-                ctx.log_warn("Ignoring CM_SLAC_PARM.REQ because max_matching_sessions was reached (" +
-                             std::to_string(max_sessions) + ")");
+                ctx.log_warn(
+                    fmt::format("Ignoring CM_SLAC_PARM.REQ because max_matching_sessions was reached ({})", max_sessions));
                 return;
             }
             session_iter = data.sessions.emplace(data.sessions.end(), std::make_unique<Session>());

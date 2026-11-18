@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 
+#include <fmt/format.h>
 #include <cbv2g/common/exi_bitstream.h>
 
 #include <iso15118/io/stream_view.hpp>
@@ -100,7 +101,7 @@ size_t serialize_helper(const MessageType& in, const io::StreamOutputView& strea
     const auto error = serialize_to_exi(in, out);
 
     if (error != 0) {
-        throw std::runtime_error("Could not encode exi: " + std::to_string(error));
+        throw std::runtime_error(fmt::format("Could not encode exi: {}", error));
     }
 
     return exi_bitstream_get_length(&out);

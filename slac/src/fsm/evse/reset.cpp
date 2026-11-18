@@ -23,6 +23,7 @@
 #include <everest/slac/slac_messages.hpp>
 #include <everest/slac/telemetry.hpp>
 
+#include <fmt/format.h>
 #include <string>
 
 namespace everest::lib::slac::sm::evse {
@@ -127,13 +128,14 @@ struct MsgSent : InnerLevelState<StateId::ResetMsgSent> {
                 return unhandled();
             }
             if (not has_set_key_attempts_left(machine)) {
-                ctx.log_error("CM_SET_KEY timeout without valid CM_SET_KEY.CNF after " +
-                              std::to_string(config.set_key_max_attempts) + " attempts; continuing to reset/idle path");
+                ctx.log_error(fmt::format(
+                    "CM_SET_KEY timeout without valid CM_SET_KEY.CNF after {} attempts; continuing to reset/idle path",
+                    config.set_key_max_attempts));
                 return transition(std::make_unique<MsgValid>(machine));
             }
             data.set_key_attempts++;
-            ctx.log_warn("Retrying CM_SET_KEY.REQ due to timeout. Attempt " + std::to_string(data.set_key_attempts) +
-                         " of " + std::to_string(config.set_key_max_attempts));
+            ctx.log_warn(fmt::format("Retrying CM_SET_KEY.REQ due to timeout. Attempt {} of {}", data.set_key_attempts,
+                                     config.set_key_max_attempts));
             send_set_key_req(machine);
             return transition(std::make_unique<MsgSent>(machine));
         }
@@ -141,13 +143,14 @@ struct MsgSent : InnerLevelState<StateId::ResetMsgSent> {
             if (is_set_key_cnf_failed(machine, e) and is_retry_confirmed(ctx)) {
                 auto const reply = e.payload->payload_as<messages::cm_set_key_cnf>();
                 if (not has_set_key_attempts_left(machine)) {
-                    ctx.log_error("CM_SET_KEY.CNF indicates failure with result=" + std::to_string(reply->result) +
-                                  " after maximum attempts; continuing to reset/idle path");
+                    ctx.log_error(fmt::format(
+                        "CM_SET_KEY.CNF indicates failure with result={} after maximum attempts; continuing to reset/idle path",
+                        reply->result));
                     return transition(std::make_unique<MsgValid>(machine));
                 }
-                ctx.log_warn("CM_SET_KEY.CNF indicates failure with result=" + std::to_string(reply->result) +
-                             " on attempt " + std::to_string(data.set_key_attempts) + "; retrying after timeout (max " +
-                             std::to_string(config.set_key_max_attempts) + ")");
+                ctx.log_warn(fmt::format(
+                    "CM_SET_KEY.CNF indicates failure with result={} on attempt {}; retrying after timeout (max {})",
+                    reply->result, data.set_key_attempts, config.set_key_max_attempts));
                 return transition(std::make_unique<MsgSent>(machine));
             }
             if (is_set_key_cnf_success(machine, e)) {

@@ -5,6 +5,7 @@
 #include <cassert>
 #include <string>
 
+#include <fmt/format.h>
 #include <iso15118/detail/helper.hpp>
 #include <iso15118/detail/received_message_type.hpp>
 #include <iso15118/detail/variant_access.hpp>
@@ -27,7 +28,7 @@ static void handle_sap(VariantAccess& va) {
     const auto decode_status = decode_appHand_exiDocument(&va.input_stream, &doc);
 
     if (decode_status != 0) {
-        va.error = "decode_appHand_exiDocument failed with " + std::to_string(decode_status);
+        va.error = fmt::format("decode_appHand_exiDocument failed with {}", decode_status);
         va.undecodable = true;
         return;
     }
@@ -45,7 +46,7 @@ static void handle_main(VariantAccess& va) {
     const auto decode_status = decode_iso20_exiDocument(&va.input_stream, &doc);
 
     if (decode_status != 0) {
-        va.error = "decode_iso20_exiDocument failed with " + std::to_string(decode_status);
+        va.error = fmt::format("decode_iso20_exiDocument failed with {}", decode_status);
         va.undecodable = true;
         return;
     }
@@ -81,7 +82,7 @@ static void handle_dc(VariantAccess& va) {
     const auto decode_status = decode_iso20_dc_exiDocument(&va.input_stream, &doc);
 
     if (decode_status != 0) {
-        va.error = "decode_iso20_dc_exiDocument failed with " + std::to_string(decode_status);
+        va.error = fmt::format("decode_iso20_dc_exiDocument failed with {}", decode_status);
         va.undecodable = true;
         return;
     }
@@ -107,7 +108,7 @@ static void handle_ac(VariantAccess& va) {
     const auto decode_status = decode_iso20_ac_exiDocument(&va.input_stream, &doc);
 
     if (decode_status != 0) {
-        va.error = "decode_iso20_ac_exiDocument failed with " + std::to_string(decode_status);
+        va.error = fmt::format("decode_iso20_ac_exiDocument failed with {}", decode_status);
         va.undecodable = true;
         return;
     }
@@ -127,7 +128,7 @@ static void handle_ac_iec_der(VariantAccess& va) {
     const auto decode_status = decode_iso20_ac_der_iec_exiDocument(&va.input_stream, &doc);
 
     if (decode_status != 0) {
-        va.error = "decode_iso20_ac_der_iec_exiDocument failed with " + std::to_string(decode_status);
+        va.error = fmt::format("decode_iso20_ac_der_iec_exiDocument failed with {}", decode_status);
         va.undecodable = true;
         return;
     }
@@ -147,7 +148,7 @@ static void handle_ac_sae_der(VariantAccess& va) {
     const auto decode_status = decode_iso20_ac_der_sae_exiDocument(&va.input_stream, &doc);
 
     if (decode_status != 0) {
-        va.error = "decode_iso20_ac_der_sae_exiDocument failed with " + std::to_string(decode_status);
+        va.error = fmt::format("decode_iso20_ac_der_sae_exiDocument failed with {}", decode_status);
         va.undecodable = true;
         return;
     }

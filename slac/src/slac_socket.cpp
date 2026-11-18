@@ -4,13 +4,13 @@
 #include <everest/slac/slac.hpp>
 #include <everest/slac/slac_socket.hpp>
 
+#include <fmt/format.h>
 #include <cerrno>
 #include <cstring>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <net/if.h>
 #include <netinet/in.h>
-#include <sstream>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -26,12 +26,10 @@ namespace {
 using namespace everest::lib::io;
 
 std::string build_errno_string(std::string const& msg, int error_code) {
-    std::stringstream str;
-    str << msg;
-    if (error_code != 0) {
-        str << ": " << strerror(error_code) << " (" << error_code << ")";
+    if (error_code == 0) {
+        return msg;
     }
-    return str.str();
+    return fmt::format("{}: {} ({})", msg, strerror(error_code), error_code);
 }
 
 event::unique_fd open_raw_socket(std::string const& if_name) {
@@ -147,8 +145,7 @@ bool slac_socket::tx(PayloadT const& payload) {
     if (static_cast<std::size_t>(status) != frame_size) {
         auto error_code = EIO;
         set_error_state(m_error_code, m_error_message, error_code,
-                        "Failed to send complete Homeplug payload: sent " + std::to_string(status) + " of " +
-                            std::to_string(frame_size) + " bytes");
+                        fmt::format("Failed to send complete Homeplug payload: sent {} of {} bytes", status, frame_size));
         return false;
     }
     set_error_state(m_error_code, m_error_message, 0, {});

@@ -1,3 +1,7 @@
+if(NOT TARGET fmt::fmt)
+    find_package(fmt CONFIG REQUIRED)
+endif()
+
 add_library(slac)
 add_library(slac::slac ALIAS slac)
 
@@ -41,6 +45,7 @@ target_link_libraries(slac
         everest::tls
     PRIVATE
         everest::util
+        fmt::fmt
 )
 
 if(BUILD_TESTING)

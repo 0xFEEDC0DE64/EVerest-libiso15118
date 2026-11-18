@@ -22,6 +22,7 @@
 #include <everest/slac/slac_messages.hpp>
 #include <everest/slac/telemetry.hpp>
 
+#include <fmt/format.h>
 #include <cstdio>
 #include <string>
 
@@ -103,9 +104,8 @@ template <class Vendor, StateId Id> struct CheckLink : LinkCheckState<Vendor, Id
                                                                                                 EventId::message, e));
             }
             data.consecutive_neg_link_status++;
-            ctx.log_warn("Negative LINK_STATUS while matched (" + std::to_string(data.consecutive_neg_link_status) +
-                         "/" + std::to_string(data.neg_link_status_threshold) +
-                         "), keeping the link up while debouncing");
+            ctx.log_warn(fmt::format("Negative LINK_STATUS while matched ({}/{}), keeping the link up while debouncing",
+                                     data.consecutive_neg_link_status, data.neg_link_status_threshold));
             return this->handled();
         }
         return this->unhandled();

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string>
 
+#include <fmt/format.h>
 #include <everest/slac/slac_defs.hpp>
 
 namespace everest::lib::slac::fsm::evse {
@@ -84,7 +85,7 @@ std::optional<MacAddress> ValidateHandler::tick(Context& ctx) {
         send_cnf(ctx, owner_mac_, defs::CM_VALIDATE_REQ_RESULT_SUCCESS, static_cast<std::uint8_t>(toggles));
         armed_ = false;
         step2_pending_ = false;
-        ctx.log_info("CM_VALIDATE: detected " + std::to_string(toggles) + " BCB toggle(s) during the toggle window");
+        ctx.log_info(fmt::format("CM_VALIDATE: detected {} BCB toggle(s) during the toggle window", toggles));
         // [V2G3-A09-89] starts TT_match_sequence with every step-2 CNF. With no toggle seen, the EV
         // gets a count that cannot match its own (C_EV_vald_nb_toggles >= 1) and moves on to the
         // next EVSE ([V2G3-A09-73]), so no CM_SLAC_MATCH.REQ follows. Arming the window only once

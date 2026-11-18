@@ -5,6 +5,7 @@
 #include <cassert>
 #include <string>
 
+#include <fmt/format.h>
 #include <iso15118/detail/helper.hpp>
 #include <iso15118/detail/message_2/variant_access.hpp>
 
@@ -22,7 +23,7 @@ Variant::Variant(const io::StreamInputView& buffer_view) {
     const auto decode_status = decode_iso2_exiDocument(&input_stream, &doc);
 
     if (decode_status != 0) {
-        error = "decode_iso2_exiDocument failed with " + std::to_string(decode_status);
+        error = fmt::format("decode_iso2_exiDocument failed with {}", decode_status);
         logf_error("Failed due to: %s\n", error.c_str());
         return;
     }

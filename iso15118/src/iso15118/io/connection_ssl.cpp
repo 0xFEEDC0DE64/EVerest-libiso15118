@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include <fmt/format.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -180,7 +181,7 @@ void ConnectionSSL::write(const uint8_t* buf, size_t len) {
     if (total_written != len) {
         std::string msg = "Failed to write on TLS connection: ";
         msg += result_name(result);
-        msg += " (" + std::to_string(total_written) + "/" + std::to_string(len) + " bytes)";
+        msg += fmt::format(" ({}/{} bytes)", total_written, len);
         const auto ssl_err = ssl->connection->last_error();
         if (not ssl_err.empty()) {
             msg += " openssl=";

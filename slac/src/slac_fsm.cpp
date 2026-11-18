@@ -4,6 +4,7 @@
 #include "fsm/evse/machine.hpp"
 #include "fsm/fsm_helpers.hpp"
 
+#include <fmt/format.h>
 #include <everest/slac/slac_fsm.hpp>
 #include <everest/slac/telemetry.hpp>
 
@@ -29,7 +30,7 @@ struct PrintVisitor : sm::Visitor {
 
     void on_dynamic_session_start(int index, std::size_t depth) override {
         std::string indent(depth * 4, ' ');
-        output += indent + " * [Dynamic Session " + std::to_string(index) + "]\n";
+        output += fmt::format("{} * [Dynamic Session {}]\n", indent, index);
     }
 };
 

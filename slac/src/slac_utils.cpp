@@ -4,6 +4,8 @@
 #include <everest/slac/slac_utils.hpp>
 #include <everest/tls/openssl_util.hpp>
 
+#include <fmt/format.h>
+
 namespace everest::lib::slac::utils {
 
 namespace qca_defs = slac::defs::qualcomm;
@@ -59,9 +61,8 @@ std::string device_info(messages::qualcomm::op_attr_cnf const& msg) {
     result += get_string_view(msg.hw_platform);
     result += "\n  SW Platform: ";
     result += get_string_view(msg.sw_platform);
-    result += ("\n  Firmware: " + std::to_string(msg.version_major) + "." + std::to_string(msg.version_minor) + "." +
-               std::to_string(msg.version_pib) + "." + std::to_string(msg.reserved) + "-" +
-               std::to_string(msg.version_build));
+    result += fmt::format("\n  Firmware: {}.{}.{}.{}-{}", msg.version_major, msg.version_minor, msg.version_pib,
+                          msg.reserved, msg.version_build);
     result += "\n  Build date: ";
     result += get_string_view(msg.build_date);
 
@@ -74,7 +75,7 @@ std::string device_info(messages::qualcomm::op_attr_cnf const& msg) {
     } else if (zc_signal == qca_defs::OP_ATTR_ZC_SIGNAL_MISSING) {
         result += "Missing";
     } else {
-        result += ("Unknown (" + std::to_string(zc_signal) + ")");
+        result += fmt::format("Unknown ({})", zc_signal);
     }
 
     result += "\n  Line frequency: ";
@@ -85,15 +86,14 @@ std::string device_info(messages::qualcomm::op_attr_cnf const& msg) {
     } else if (line_freq == qca_defs::OP_ATTR_LINE_FREQUENCY_60HZ) {
         result += "60Hz";
     } else {
-        result += ("Unknown (" + std::to_string(line_freq) + ")");
+        result += fmt::format("Unknown ({})", line_freq);
     }
 
     return result;
 }
 std::string device_info(messages::lumissil::nscm_get_version_cnf const& msg) {
-    return "Lumissil PLC Device Firmware version: " + std::to_string(msg.version_major) + "." +
-           std::to_string(msg.version_minor) + "." + std::to_string(msg.version_patch) + "." +
-           std::to_string(msg.version_build);
+    return fmt::format("Lumissil PLC Device Firmware version: {}.{}.{}.{}", msg.version_major, msg.version_minor,
+                       msg.version_patch, msg.version_build);
 }
 
 } // namespace everest::lib::slac::utils

@@ -3,6 +3,7 @@
 
 #include "everest/slac/slac_event.hpp"
 #include "everest/io/socket/socket.hpp"
+#include <fmt/format.h>
 #include <cstring>
 #include <everest/util/misc/bind.hpp>
 #include <linux/if_ether.h>
@@ -151,8 +152,8 @@ void SlacEvent::report_tx_fault() {
     // the socket failed in between: the consumer replaces the message, and the detail names what
     // was seen first.
     if (m_error_cb) {
-        m_error_cb(true, "PLC frame transmission failing: " + std::to_string(m_tx_failures) +
-                             " consecutive sends rejected by the socket");
+        m_error_cb(true, fmt::format("PLC frame transmission failing: {} consecutive sends rejected by the socket",
+                                    m_tx_failures));
     }
     // The consumer tears its state machine down on the report, so nothing sends again and no
     // accepted frame could ever signal recovery. Reopen the socket instead: the queued payloads are

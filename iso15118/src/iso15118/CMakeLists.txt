@@ -1,4 +1,7 @@
 find_package(Threads REQUIRED)
+if(NOT TARGET fmt::fmt)
+    find_package(fmt CONFIG REQUIRED)
+endif()
 
 add_library(iso15118)
 add_library(everest::iso15118 ALIAS iso15118)
@@ -186,6 +189,7 @@ target_link_libraries(iso15118
         everest::cbv2g::iso2
         everest::cbv2g::din
         everest::util
+        fmt::fmt
     PRIVATE
         Threads::Threads
 )

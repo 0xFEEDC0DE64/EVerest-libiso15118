@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Pionix GmbH and Contributors to EVerest
 #include <algorithm>
-#include <iomanip>
-#include <sstream>
+#include <cstddef>
+#include <tuple>
+
+#include <fmt/format.h>
 
 #include <everest/tls/openssl_util.hpp>
 
@@ -23,13 +25,21 @@ namespace iso15118::d20::state {
 namespace {
 
 std::string session_id_to_string(const message_20::datatypes::SessionId& session_id) {
-    std::stringstream ss;
-    ss << "0x" << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(session_id[0]);
-    for (unsigned int i = 1; i < session_id.size(); ++i) {
-        ss << ", 0x" << std::uppercase << std::hex << std::setw(2) << std::setfill('0')
-           << (int)static_cast<int>(session_id[i]);
+    // First byte: "0xXX"; each following byte: ", 0xXX".
+    constexpr std::size_t id_len = std::tuple_size_v<message_20::datatypes::SessionId>;
+    static_assert(id_len > 0);
+    char buffer[4 + (id_len - 1) * 6 + 1];
+    char* out = buffer;
+    char* const end = buffer + sizeof(buffer) - 1;
+
+    for (std::size_t i = 0; i < session_id.size(); ++i) {
+        const auto result = fmt::format_to_n(out, static_cast<std::size_t>(end - out), "{}0x{:02X}",
+                                             i == 0 ? "" : ", ", static_cast<unsigned int>(session_id[i]));
+        out = result.out;
     }
-    return ss.str();
+
+    *out = '\0';
+    return std::string(buffer, static_cast<std::size_t>(out - buffer));
 }
 
 bool session_is_zero(const message_20::datatypes::SessionId& session_id) {

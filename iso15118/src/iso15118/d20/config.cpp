@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 
+#include <fmt/format.h>
 #include <iso15118/detail/d20/config_validation.hpp>
 #include <iso15118/detail/helper.hpp>
 #include <iso15118/message/ac_der_sae_types.hpp>
@@ -226,8 +227,7 @@ std::optional<std::string> check_curve_length(const sae::CurveDataPointsList& po
     if (points.size() >= static_cast<size_t>(dt_sae::CurveDataPointsMinLength)) {
         return std::nullopt;
     }
-    return std::string(name) + phase + " carries fewer than " + std::to_string(dt_sae::CurveDataPointsMinLength) +
-           " curve data points";
+    return fmt::format("{}{} carries fewer than {} curve data points", name, phase, dt_sae::CurveDataPointsMinLength);
 }
 
 /// \brief Trip curve points are ordered by strictly ascending duration (M.2.2.1.10, M.2.2.1.11).
@@ -446,8 +446,7 @@ std::optional<std::string> check_nominal_within_maximum(const NominalMaximumPair
     const auto maximum_value = value_of(pair.maximum.value());
 
     if (nominal_value > maximum_value) {
-        return std::string(pair.nominal_name) + " " + std::to_string(nominal_value) + " exceeds " + pair.maximum_name +
-               " " + std::to_string(maximum_value);
+        return fmt::format("{} {} exceeds {} {}", pair.nominal_name, nominal_value, pair.maximum_name, maximum_value);
     }
     return std::nullopt;
 }
